@@ -4,6 +4,12 @@ import "./globals.css";
 export const metadata: Metadata = {
     title: "Guarandrade - Sistema de Gestão",
     description: "O sistema de gestão mais avançado para sua lanchonete.",
+    manifest: "/manifest.json",
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: "black-translucent",
+        title: "Guarandrade"
+    },
 };
 
 export default function RootLayout({

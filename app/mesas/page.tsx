@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 export default function Mesas() {
     const [tables, setTables] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [receiptModal, setReceiptModal] = useState<any>(null);
 
     const fetchTables = async () => {
         const { data, error } = await supabase
@@ -35,6 +36,57 @@ export default function Mesas() {
         };
     }, []);
 
+    const handleOpenReceipt = async (table: any) => {
+        if (table.status !== 'occupied') return;
+
+        const { data, error } = await supabase
+            .from('orders')
+            .select(`
+                *,
+                order_items (
+                    *,
+                    products (name)
+                )
+            `)
+            .eq('table_id', table.id)
+            .neq('status', 'finalizado')
+            .single();
+
+        if (data) {
+            setReceiptModal({ table, order: data });
+        } else {
+            alert('Não foi possível encontrar um pedido ativo para esta mesa.');
+        }
+    };
+
+    const handleFecharConta = async () => {
+        if (!receiptModal) return;
+
+        const { table, order } = receiptModal;
+
+        // 1. Finalizar Pedido
+        await supabase
+            .from('orders')
+            .update({ status: 'finalizado' })
+            .eq('id', order.id);
+
+        // 2. Marcar Mesa para Limpeza
+        await supabase
+            .from('tables')
+            .update({ status: 'dirty', total_amount: 0 })
+            .eq('id', table.id);
+
+        setReceiptModal(null);
+        alert(`Mesa ${table.id} fechada com sucesso! 💰`);
+    };
+
+    const handleLiberarMesa = async (id: number) => {
+        await supabase
+            .from('tables')
+            .update({ status: 'available' })
+            .eq('id', id);
+    };
+
     if (loading) return (
         <div className="flex h-screen items-center justify-center bg-black text-white">
             <div className="animate-pulse flex flex-col items-center gap-4">
@@ -53,10 +105,6 @@ export default function Mesas() {
                     <div>
                         <h1 className="text-3xl font-bold text-white mb-1">Gestão de Mesas 🍽️</h1>
                         <p className="text-gray-400">Monitore, abra e feche contas em tempo real.</p>
-                    </div>
-                    <div className="flex gap-2">
-                        <button className="glass px-4 py-2 text-sm font-bold text-green-400">Liberar Todas</button>
-                        <button className="glass px-4 py-2 text-sm font-bold text-indigo-400">Gerar QRs</button>
                     </div>
                 </header>
 
@@ -77,36 +125,93 @@ export default function Mesas() {
                                             table.status === 'dirty' ? 'Limpeza' : 'Disponível'}
                                     </span>
                                 </div>
-                                <div className="text-3xl grayscale group-hover:grayscale-0 transition-all opacity-20 group-hover:opacity-100">
-                                    📍
+                                <div className="text-3xl grayscale group-hover:grayscale-0 transition-all">
+                                    {table.status === 'occupied' ? '🍔' : table.status === 'dirty' ? '🧹' : '✅'}
                                 </div>
                             </div>
 
-                            {table.status === 'occupied' ? (
-                                <div className="flex-1 space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-400">Total:</span>
-                                        <span className="text-indigo-400 font-bold">R$ {table.total_amount || '0.00'}</span>
+                            <div className="flex-1">
+                                {table.status === 'occupied' ? (
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-gray-400">Total Acumulado:</p>
+                                        <p className="text-2xl font-bold text-indigo-400">R$ {parseFloat(table.total_amount).toFixed(2).replace('.', ',')}</p>
                                     </div>
-                                </div>
-                            ) : (
-                                <div className="flex-1 flex items-center justify-center py-4 border border-dashed border-white/10 rounded-xl">
-                                    <p className="text-xs text-gray-500 uppercase font-bold tracking-widest">Aguardando Cliente</p>
-                                </div>
-                            )}
-
-                            <div className="grid grid-cols-2 gap-2 mt-2">
-                                <button className="glass py-2 text-[10px] font-bold uppercase hover:bg-white/10">Ver Detalhes</button>
-                                {table.status === 'available' ? (
-                                    <button className="bg-indigo-600 py-2 text-[10px] font-bold uppercase text-white rounded-lg">Abrir Mesa</button>
                                 ) : (
-                                    <button className="bg-red-600/20 text-red-400 py-2 text-[10px] font-bold uppercase rounded-lg border border-red-500/30">Fechar Conta</button>
+                                    <p className="text-xs text-gray-500 italic">Mesa pronta para novos clientes.</p>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-2 mt-2">
+                                {table.status === 'occupied' ? (
+                                    <button
+                                        onClick={() => handleOpenReceipt(table)}
+                                        className="bg-red-600/20 text-red-400 py-3 rounded-xl font-bold text-xs uppercase border border-red-500/20 hover:bg-red-600/30"
+                                    >
+                                        Fechar Conta
+                                    </button>
+                                ) : table.status === 'dirty' ? (
+                                    <button
+                                        onClick={() => handleLiberarMesa(table.id)}
+                                        className="bg-yellow-600/20 text-yellow-400 py-3 rounded-xl font-bold text-xs uppercase border border-yellow-500/20"
+                                    >
+                                        Marcar como Limpa
+                                    </button>
+                                ) : (
+                                    <button className="glass py-3 rounded-xl font-bold text-xs uppercase opacity-30 cursor-not-allowed">
+                                        Disponível
+                                    </button>
                                 )}
                             </div>
                         </div>
                     ))}
                 </div>
             </main>
+
+            {/* Receipt Modal */}
+            {receiptModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="glass w-full max-w-md overflow-hidden animate-fade-in">
+                        <div className="p-6 bg-white/5 border-b border-white/5 text-center">
+                            <h2 className="text-2xl font-bold text-white">Resumo da Conta 🧾</h2>
+                            <p className="text-indigo-400 font-bold uppercase tracking-widest text-xs mt-1">{receiptModal.table.name}</p>
+                        </div>
+
+                        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                            {receiptModal.order.order_items.map((item: any) => (
+                                <div key={item.id} className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
+                                    <div className="flex flex-col">
+                                        <span className="text-white font-bold">{item.quantity}x {item.products.name}</span>
+                                        <span className="text-xs text-gray-500">Un: R$ {parseFloat(item.unit_price).toFixed(2)}</span>
+                                    </div>
+                                    <span className="text-white font-medium">R$ {(item.quantity * item.unit_price).toFixed(2)}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-6 bg-white/5 space-y-4">
+                            <div className="flex justify-between items-end">
+                                <span className="text-gray-400 text-sm">Total Geral:</span>
+                                <span className="text-3xl font-bold text-white">R$ {parseFloat(receiptModal.order.total_amount).toFixed(2).replace('.', ',')}</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={() => setReceiptModal(null)}
+                                    className="glass py-3 rounded-xl font-bold text-gray-400 hover:text-white"
+                                >
+                                    Voltar
+                                </button>
+                                <button
+                                    onClick={handleFecharConta}
+                                    className="bg-green-600 py-3 rounded-xl font-bold text-white shadow-lg shadow-green-600/20 hover:bg-green-500"
+                                >
+                                    Confirmar Pagamento
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

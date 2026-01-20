@@ -175,8 +175,8 @@ export default function Home() {
                                     <div className="text-right">
                                         <p className="font-bold text-sm text-white">R$ {Number(order.total_amount).toFixed(2).replace('.', ',')}</p>
                                         <p className={`text-[10px] font-bold uppercase ${order.status === 'fila' ? 'text-blue-400' :
-                                                order.status === 'preparando' ? 'text-yellow-400' :
-                                                    order.status === 'pronto' ? 'text-green-400' : 'text-gray-400'
+                                            order.status === 'preparando' ? 'text-yellow-400' :
+                                                order.status === 'pronto' ? 'text-green-400' : 'text-gray-400'
                                             }`}>{order.status}</p>
                                     </div>
                                 </div>
@@ -188,14 +188,36 @@ export default function Home() {
                     </div>
 
                     {/* Quick Actions / Voice Order */}
-                    <div className="glass p-5 bg-gradient-to-br from-indigo-600/10 to-transparent">
+                    <div className="glass p-5 bg-gradient-to-br from-indigo-600/10 to-transparent relative overflow-hidden">
+                        <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-600/20 blur-3xl rounded-full animate-pulse"></div>
                         <h3 className="text-lg font-bold mb-4 text-white">Pedir por Voz 🎙️</h3>
-                        <p className="text-sm text-gray-400 mb-6">Mantenha pressionado para falar um pedido rapidamente.</p>
+                        <p className="text-sm text-gray-400 mb-6 font-medium">Fale algo como: "Mesa 5, um X-Tudo e uma Coca"</p>
+
                         <div className="flex flex-col items-center justify-center gap-4 py-4">
-                            <div className="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center text-3xl shadow-xl shadow-indigo-500/40 cursor-pointer hover:scale-110 active:scale-95 transition-all text-white">
+                            <button
+                                onMouseDown={() => {
+                                    const recognition = new (window as any).webkitSpeechRecognition();
+                                    recognition.lang = 'pt-BR';
+                                    recognition.start();
+                                    (window as any).recognition = recognition;
+                                    document.getElementById('mic-status')?.classList.remove('hidden');
+                                }}
+                                onMouseUp={() => {
+                                    const recognition = (window as any).recognition;
+                                    if (recognition) {
+                                        recognition.stop();
+                                        recognition.onresult = (event: any) => {
+                                            const text = event.results[0][0].transcript;
+                                            alert(`Entendi seu pedido: "${text}"\n\nProcessando inteligência de pedidos...`);
+                                        };
+                                        document.getElementById('mic-status')?.classList.add('hidden');
+                                    }
+                                }}
+                                className="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center text-3xl shadow-xl shadow-indigo-500/40 cursor-pointer hover:scale-110 active:scale-95 transition-all text-white relative z-10"
+                            >
                                 🎤
-                            </div>
-                            <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Ouvindo...</span>
+                            </button>
+                            <span id="mic-status" className="hidden text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Ouvindo seu pedido...</span>
                         </div>
                     </div>
                 </div>
