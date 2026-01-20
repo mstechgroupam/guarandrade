@@ -135,8 +135,9 @@ export default function Home() {
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                         {tables.map((table) => (
-                            <div
+                            <Link
                                 key={table.id}
+                                href="/mesas"
                                 className={`glass p-4 text-center cursor-pointer hover:scale-105 active:scale-95 border-t-4 ${table.status === 'occupied' ? 'border-t-red-500' :
                                     table.status === 'dirty' ? 'border-t-yellow-500' : 'border-t-green-500'
                                     }`}
@@ -150,7 +151,7 @@ export default function Home() {
                                 ) : (
                                     <span className="text-gray-500 text-[10px] uppercase font-bold">{table.status === 'dirty' ? 'Limpeza' : 'Livre'}</span>
                                 )}
-                            </div>
+                            </Link>
                         ))}
                     </div>
                 </section>

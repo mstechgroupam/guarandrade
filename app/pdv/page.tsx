@@ -4,10 +4,9 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { supabase } from '@/lib/supabase';
 
-const MENU_CATEGORIES = ['Todos', 'Lanches', 'Bebidas', 'Porções', 'Sobremesas'];
-
 export default function PDV() {
-    const [activeCategory, setActiveCategory] = useState('Todos');
+    const [activeCategory, setActiveCategory] = useState({ id: 'all', name: 'Todos' });
+    const [categories, setCategories] = useState<any[]>([]);
     const [menuItems, setMenuItems] = useState<any[]>([]);
     const [tables, setTables] = useState<any[]>([]);
     const [cart, setCart] = useState<{ item: any, qty: number }[]>([]);
@@ -16,11 +15,13 @@ export default function PDV() {
 
     useEffect(() => {
         const fetchData = async () => {
-            const [productsRes, tablesRes] = await Promise.all([
+            const [categoriesRes, productsRes, tablesRes] = await Promise.all([
+                supabase.from('categories').select('*').order('name'),
                 supabase.from('products').select('*').eq('status', 'Ativo'),
                 supabase.from('tables').select('*').order('id', { ascending: true })
             ]);
 
+            if (categoriesRes.data) setCategories(categoriesRes.data);
             if (productsRes.data) setMenuItems(productsRes.data);
             if (tablesRes.data) setTables(tablesRes.data);
         };
@@ -66,9 +67,6 @@ export default function PDV() {
         menuItems.forEach(item => {
             const itemName = item.name.toLowerCase();
             if (words.includes(itemName)) {
-                // Look for quantity before the product name
-                const regex = new RegExp(`(\\w+)\\s+${itemName}|${itemName}`, 'g');
-                let match;
                 let foundAny = false;
 
                 // Simple search for number keywords near product name
@@ -122,7 +120,6 @@ export default function PDV() {
 
             if (itemsError) throw itemsError;
 
-            // Update table total (sum existing + new)
             const currentTable = tables.find(t => t.id === selectedTable);
             const newTotal = (parseFloat(currentTable?.total_amount || 0) + total);
 
@@ -139,6 +136,12 @@ export default function PDV() {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const getProductIcon = (item: any) => {
+        const cat = categories.find(c => c.id === item.category_id);
+        if (cat) return cat.icon;
+        return '🍔';
     };
 
     return (
@@ -180,33 +183,39 @@ export default function PDV() {
                             </button>
                             <span id="pdv-mic-status" className="hidden text-xs font-bold text-indigo-400 uppercase animate-pulse">Ouvindo Inteligência...</span>
                         </div>
-                        <div className="flex gap-2">
-                            {MENU_CATEGORIES.map(cat => (
+                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide max-w-[500px]">
+                            <button
+                                onClick={() => setActiveCategory({ id: 'all', name: 'Todos' })}
+                                className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${activeCategory.id === 'all' ? 'bg-white text-black' : 'glass text-gray-400 hover:text-white'}`}
+                            >
+                                Todos
+                            </button>
+                            {categories.map(cat => (
                                 <button
-                                    key={cat}
+                                    key={cat.id}
                                     onClick={() => setActiveCategory(cat)}
-                                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${activeCategory === cat ? 'bg-white text-black' : 'glass text-gray-400 hover:text-white'
-                                        }`}
+                                    className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap flex items-center gap-2 transition-all ${activeCategory.id === cat.id ? 'bg-white text-black' : 'glass text-gray-400 hover:text-white'}`}
                                 >
-                                    {cat}
+                                    <span>{cat.icon}</span>
+                                    {cat.name}
                                 </button>
                             ))}
                         </div>
                     </header>
 
                     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto pr-2 pb-4 scrollbar-hide">
-                        {menuItems.filter(i => activeCategory === 'Todos' || i.category === activeCategory).map(item => (
+                        {menuItems.filter(i => activeCategory.id === 'all' || i.category_id === activeCategory.id).map(item => (
                             <div
                                 key={item.id}
                                 onClick={() => addToCart(item)}
-                                className="glass p-5 cursor-pointer hover:bg-white/5 active:scale-95 text-center flex flex-col items-center gap-4 group"
+                                className="glass p-5 cursor-pointer hover:bg-white/5 active:scale-95 text-center flex flex-col items-center gap-4 group h-fit"
                             >
                                 <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-4xl group-hover:scale-110 transition-transform">
-                                    {item.name.toLowerCase().includes('guaraná') || item.name.toLowerCase().includes('coca') ? '🥤' : '🍔'}
+                                    {getProductIcon(item)}
                                 </div>
-                                <div>
-                                    <h4 className="font-bold text-white text-base">{item.name}</h4>
-                                    <p className="text-indigo-400 font-bold mt-1">R$ {parseFloat(item.price).toFixed(2)}</p>
+                                <div className="space-y-1">
+                                    <h4 className="font-bold text-white text-sm line-clamp-2 leading-tight">{item.name}</h4>
+                                    <p className="text-indigo-400 font-bold">R$ {parseFloat(item.price).toFixed(2).replace('.', ',')}</p>
                                 </div>
                             </div>
                         ))}
@@ -223,9 +232,9 @@ export default function PDV() {
                                     key={table.id}
                                     onClick={() => setSelectedTable(table.id)}
                                     className={`py-2 text-xs uppercase font-bold rounded-lg transition-all ${selectedTable === table.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/40' :
-                                            table.status === 'occupied' ? 'bg-red-500/10 text-red-500' :
-                                                table.status === 'dirty' ? 'bg-yellow-500/10 text-yellow-500' :
-                                                    'bg-white/5 text-gray-400 hover:bg-white/10'
+                                        table.status === 'occupied' ? 'bg-red-500/10 text-red-500' :
+                                            table.status === 'dirty' ? 'bg-yellow-500/10 text-yellow-500' :
+                                                'bg-white/5 text-gray-400 hover:bg-white/10'
                                         }`}
                                 >
                                     {table.id}
@@ -239,10 +248,10 @@ export default function PDV() {
                             <div key={c.item.id} className="flex justify-between items-center animate-fade-in">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xl">
-                                        {c.item.name.toLowerCase().includes('guaraná') ? '🥤' : '🍔'}
+                                        {getProductIcon(c.item)}
                                     </div>
-                                    <div>
-                                        <h5 className="text-sm font-bold text-white">{c.item.name}</h5>
+                                    <div className="max-w-[120px]">
+                                        <h5 className="text-sm font-bold text-white truncate">{c.item.name}</h5>
                                         <p className="text-[10px] text-gray-500">R$ {parseFloat(c.item.price).toFixed(2)} un.</p>
                                     </div>
                                 </div>
@@ -256,7 +265,7 @@ export default function PDV() {
                         {cart.length === 0 && (
                             <div className="text-center py-20 opacity-20 text-white">
                                 <div className="text-6xl mb-4 text-indigo-500">🛒</div>
-                                <p className="font-bold tracking-widest uppercase text-xs">Aguardando itens...</p>
+                                <p className="font-bold tracking-widest uppercase text-xs text-center px-4">Adicione itens para começar</p>
                             </div>
                         )}
                     </div>
@@ -269,9 +278,9 @@ export default function PDV() {
                         <button
                             onClick={finalizarPedido}
                             disabled={cart.length === 0 || !selectedTable || isSubmitting}
-                            className="w-full py-4 rounded-2xl bg-indigo-600 text-white font-bold text-lg hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-indigo-600/30 transition-all active:scale-95"
+                            className="w-full py-4 rounded-2xl bg-indigo-600 text-white font-bold text-lg hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-indigo-600/30 transition-all active:scale-95 uppercase tracking-widest"
                         >
-                            {isSubmitting ? 'ENVIANDO...' : 'LANÇAR PEDIDO'}
+                            {isSubmitting ? 'LANÇANDO...' : 'FECHAR PEDIDO'}
                         </button>
                     </div>
                 </aside>

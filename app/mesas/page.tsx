@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import { supabase } from '@/lib/supabase';
 
 export default function Mesas() {
+    const router = useRouter();
     const [tables, setTables] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [receiptModal, setReceiptModal] = useState<any>(null);
@@ -81,10 +83,22 @@ export default function Mesas() {
     };
 
     const handleLiberarMesa = async (id: number) => {
-        await supabase
+        const { error } = await supabase
             .from('tables')
             .update({ status: 'available' })
             .eq('id', id);
+
+        if (!error) fetchTables();
+    };
+
+    const handleTableClick = (table: any) => {
+        if (table.status === 'occupied') {
+            handleOpenReceipt(table);
+        } else if (table.status === 'dirty') {
+            handleLiberarMesa(table.id);
+        } else {
+            router.push('/pdv');
+        }
     };
 
     if (loading) return (
@@ -110,7 +124,11 @@ export default function Mesas() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {tables.map(table => (
-                        <div key={table.id} className="glass p-6 flex flex-col gap-4 relative overflow-hidden group">
+                        <div
+                            key={table.id}
+                            onClick={() => handleTableClick(table)}
+                            className="glass p-6 flex flex-col gap-4 relative overflow-hidden group cursor-pointer hover:bg-white/5 active:scale-95 transition-all"
+                        >
                             <div className={`absolute top-0 right-0 w-2 h-full ${table.status === 'occupied' ? 'bg-red-500' :
                                 table.status === 'dirty' ? 'bg-yellow-500' : 'bg-green-500'
                                 }`} />
@@ -144,21 +162,19 @@ export default function Mesas() {
                             <div className="grid grid-cols-1 gap-2 mt-2">
                                 {table.status === 'occupied' ? (
                                     <button
-                                        onClick={() => handleOpenReceipt(table)}
-                                        className="bg-red-600/20 text-red-400 py-3 rounded-xl font-bold text-xs uppercase border border-red-500/20 hover:bg-red-600/30"
+                                        className="bg-red-600/20 text-red-400 py-3 rounded-xl font-bold text-xs uppercase border border-red-500/20 group-hover:bg-red-600/30"
                                     >
                                         Fechar Conta
                                     </button>
                                 ) : table.status === 'dirty' ? (
                                     <button
-                                        onClick={() => handleLiberarMesa(table.id)}
                                         className="bg-yellow-600/20 text-yellow-400 py-3 rounded-xl font-bold text-xs uppercase border border-yellow-500/20"
                                     >
                                         Marcar como Limpa
                                     </button>
                                 ) : (
-                                    <button className="glass py-3 rounded-xl font-bold text-xs uppercase opacity-30 cursor-not-allowed">
-                                        Disponível
+                                    <button className="bg-green-600/20 text-green-400 py-3 rounded-xl font-bold text-xs uppercase border border-green-500/20">
+                                        Novo Pedido
                                     </button>
                                 )}
                             </div>
@@ -169,8 +185,11 @@ export default function Mesas() {
 
             {/* Receipt Modal */}
             {receiptModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="glass w-full max-w-md overflow-hidden animate-fade-in">
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="glass w-full max-w-md overflow-hidden animate-fade-in" onClick={(e) => e.stopPropagation()}>
                         <div className="p-6 bg-white/5 border-b border-white/5 text-center">
                             <h2 className="text-2xl font-bold text-white">Resumo da Conta 🧾</h2>
                             <p className="text-indigo-400 font-bold uppercase tracking-widest text-xs mt-1">{receiptModal.table.name}</p>
@@ -196,13 +215,13 @@ export default function Mesas() {
 
                             <div className="grid grid-cols-2 gap-3">
                                 <button
-                                    onClick={() => setReceiptModal(null)}
+                                    onClick={(e) => { e.stopPropagation(); setReceiptModal(null); }}
                                     className="glass py-3 rounded-xl font-bold text-gray-400 hover:text-white"
                                 >
                                     Voltar
                                 </button>
                                 <button
-                                    onClick={handleFecharConta}
+                                    onClick={(e) => { e.stopPropagation(); handleFecharConta(); }}
                                     className="bg-green-600 py-3 rounded-xl font-bold text-white shadow-lg shadow-green-600/20 hover:bg-green-500"
                                 >
                                     Confirmar Pagamento
